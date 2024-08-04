@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.ps.administrator.strainsensorapp.MainActivity">
+
+    <RelativeLayout
+        android:id="@+id/relativelayout"
+        android:layout_width="400dp"
+        android:layout_height="500dp"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentBottom="true"
+        android:orientation="vertical"
+        tools:layout_editor_absoluteX="5dp"
+        tools:layout_editor_absoluteY="-1dp">
+
+        <!-- MatrixGridView 将被添加在这里 -->
+
+
+        <TextView
+            android:id="@+id/tv_Connect"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="220dp"
+            android:layout_marginTop="29dp"
+            android:text="NotConnect" />
+
+        <Button
+            android:id="@+id/search_bt"
+            android:layout_width="150dp"
+            android:layout_height="50dp"
+            android:layout_alignBaseline="@+id/tv_Connect"
+            android:layout_alignBottom="@+id/tv_Connect"
+
+            android:text="Search device" />
+
+
+        <com.example.myjava.strainsensorapp.MatrixGridView
+            android:id="@+id/matrixGridView"
+            android:layout_width="match_parent"
+            android:layout_height="300dp"
+            android:layout_marginTop="100dp"
+            android:layout_weight="1" />
+
+
+
+    </RelativeLayout>
+</android.support.constraint.ConstraintLayout>
