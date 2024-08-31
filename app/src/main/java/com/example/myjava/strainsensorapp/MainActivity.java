@@ -47,8 +47,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     boolean HasConnected = false;
     //File
     private CsvOperate Resistance;
+    private CsvOperate logFile;
     DecimalFormat df = new DecimalFormat(".00");
-    PiecewiseLinearFunction[] functions = new PiecewiseLinearFunction[24];
+    PiecewiseLinearFunction[] functions = new PiecewiseLinearFunction[resistanceCount];
+    Double[] rowData = new Double[resistanceCount * 2];
 
     //Handler for main thread
     private class MyHandler extends Handler {
@@ -76,23 +78,31 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         int idx = 0;
                         for (int i = 0; i < 8; i++) {
                             for (int j = 0; j < 3; j++) {
-                                double evaluate = functions[idx].evaluate(BLEClient.checklength[idx++]);
+                                double evaluate = functions[idx].evaluate(BLEClient.checklength[idx]);
                                 matrixGridView.setValue(i, j, evaluate);
+                                rowData[idx] = BLEClient.checklength[idx];
+                                rowData[idx + resistanceCount] = evaluate;
+                                idx++;
                             }
                         }
+                        //存储数据
+                        saveDataToFile();
                         break;
                     case Constants.READ_FAIL:
                         Toast.makeText(activity, "接收数据失败！！", Toast.LENGTH_LONG).show();
                         break;
                     case Constants.Cmd_Start:
-                        for (int i = 0; i < 10; i++) {
-                            WriteDoubleFramesToFile(mBLEClient.checklength[i], i, 24, Resistance);
-                        }
                         break;
                     case Constants.Cmd_Stop:
                         break;
                 }
             }
+        }
+    }
+
+    private void saveDataToFile() {
+        for (int i = 0; i < rowData.length; i++) {
+            WriteDoubleFramesToFile(rowData[i], i, rowData.length, Resistance);
         }
     }
 
@@ -110,17 +120,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         //File
         if (PermissionManage.verifyStoragePermissions(this)) {
-            Resistance = new CsvOperate(Constants.Resistance, false, this);
+            Resistance = new CsvOperate(Constants.Resistance, false, this,true);
+            logFile = new CsvOperate(Constants.LogFile, false, this,false);
             String[][] rawData = ExcelUtils.readFromExcel("3x8阵列输出.xlsx");
             functions = getFunctions(rawData);
         }
-        mBLEClient = new BLEClient(MainActivity.this, handler);
+        mBLEClient = new BLEClient(MainActivity.this, handler, logFile);
 
     }
 
     private PiecewiseLinearFunction[] getFunctions(String[][] rawData) {
-        if(rawData == null){
-            return new PiecewiseLinearFunction[24];
+        if (rawData == null) {
+            return new PiecewiseLinearFunction[resistanceCount];
         }
         double[] yPoints = new double[pointCount];
         double[] xPoints = new double[pointCount];
@@ -128,7 +139,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         PiecewiseLinearFunction[] result = new PiecewiseLinearFunction[resistanceCount];
 
         for (int i = 0; i < pointCount; i++) {
-            if(rawData[i][0] == null){
+            if (rawData[i][0] == null) {
                 continue;
             }
             yPoints[i] = Double.parseDouble(rawData[i][0]);
@@ -137,7 +148,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         for (int j = 1; j <= resistanceCount; j++) {
             for (int i = 0; i < pointCount; i++) {
-                if(rawData[i][j] == null){
+                if (rawData[i][j] == null) {
                     continue;
                 }
                 xPoints[i] = Double.parseDouble(rawData[i][j]);

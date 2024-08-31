@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="com.ps.administrator.strainsensorapp.MainActivity">
+    tools:context="com.example.myjava.strainsensorapp.MainActivity">
 
     <RelativeLayout
         android:id="@+id/relativelayout"
@@ -15,7 +15,8 @@
         android:layout_alignParentBottom="true"
         android:orientation="vertical"
         tools:layout_editor_absoluteX="5dp"
-        tools:layout_editor_absoluteY="-1dp">
+        tools:layout_editor_absoluteY="-1dp"
+        tools:ignore="MissingConstraints">
 
         <!-- MatrixGridView 将被添加在这里 -->
 

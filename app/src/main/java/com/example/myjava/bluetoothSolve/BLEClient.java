@@ -15,6 +15,8 @@ import android.os.Message;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.example.myjava.dataManage.CsvOperate;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -60,10 +62,13 @@ public class BLEClient {
 
     public static boolean startRec1 = false;
 
+    private CsvOperate logfile;
+
     // construct function
-    public BLEClient(Activity newAct, Handler newHandler) {
+    public BLEClient(Activity newAct, Handler newHandler, CsvOperate csvOperate) {
         uiActivity = newAct;
         uiHandler = newHandler;
+        logfile = csvOperate;
 
         initBLE();//get BluetoothAdapter and open Bluetooth.
 
@@ -178,16 +183,16 @@ public class BLEClient {
                                         BluetoothDevice mBLTdevice = BLDeviceList.get(which);
                                         mBluetoothDevice = mBLTdevice;
                                         try {
+                                            logfile.writeStringWithEOL("handleChosenDevice bondState: " + mBLTdevice.getBondState());
                                             if (mBLTdevice.getBondState() == BluetoothDevice.BOND_NONE) {
                                                 Boolean returnValue = false;
                                                 Method createBondMethod = BluetoothDevice.class.getMethod("createBond");
                                                 returnValue = (Boolean) createBondMethod.invoke(mBLTdevice);
-                                                Log.i("PS", mBLTdevice.getName() + "  " + mBLTdevice.getAddress());
                                                 Message msg = Message.obtain();
                                                 msg.what = Constants.BONDING_DEVICE;
                                                 uiHandler.sendMessage(msg);
                                             } else if (mBLTdevice.getBondState() == BluetoothDevice.BOND_BONDED) {
-
+                                                logfile.writeStringWithEOL("bluetoothConnect");
                                                 bluetoothConnect(mBLTdevice);
 
                                             } else if (mBLTdevice.getBondState() == BluetoothDevice.BOND_BONDING) {
@@ -196,7 +201,7 @@ public class BLEClient {
                                                 uiHandler.sendMessage(msg);
                                             }
                                         } catch (Exception e) {
-                                            e.printStackTrace();
+                                            logfile.writeStringWithEOL("handleChosenDevice exe: " + e);
                                         }
                                     }
 

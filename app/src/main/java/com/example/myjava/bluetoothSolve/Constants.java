@@ -14,8 +14,9 @@ public class Constants {
 	public static final int Cmd_Stop=19;
 	public static final int Cmd_Test=21;
 
-	public static final String Resistance = "1-机动学院的测试数据.csv";
+	public static final String Resistance = "PressureSensor原始数据与转化数据.csv";
 
+	public static final String LogFile = "PressureSensor日志.csv";
 	/**
 	 * 用于校准的点数量
 	 */
