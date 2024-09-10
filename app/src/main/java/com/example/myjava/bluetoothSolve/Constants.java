@@ -14,6 +14,14 @@ public class Constants {
 	public static final int Cmd_Stop=19;
 	public static final int Cmd_Test=21;
 
+	public final static int GATT_DISCONNECTED = 22;
+	public final static int GATT_SERVICES_DISCOVERED = 23;
+	public final static  int DISPLAY_SAVE = 24;
+	public final static String ACTION_GATT_DISCONNECTED =
+			"com.example.bluetooth.le.ACTION_GATT_DISCONNECTED";
+
+	public final static String ACTION_GATT_CONNECTED =
+			"com.example.bluetooth.le.ACTION_GATT_CONNECTED";
 	public static final String Resistance = "PressureSensor原始数据与转化数据.csv";
 
 	public static final String LogFile = "PressureSensor日志.csv";
@@ -26,5 +34,6 @@ public class Constants {
 	 * 用于校准的电阻数量
 	 */
 	public static final int  resistanceCount = 24;
+
 
 }

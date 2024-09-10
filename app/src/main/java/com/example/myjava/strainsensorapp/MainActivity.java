@@ -9,10 +9,12 @@ import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.provider.Settings;
 
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
@@ -29,7 +31,6 @@ import com.example.myjava.math.PiecewiseLinearFunction;
 import com.example.myjava.permissionManage.PermissionManage;
 
 
-import org.codehaus.stax2.ri.typed.NumberUtil;
 
 import java.lang.ref.WeakReference;
 import java.text.DecimalFormat;
@@ -38,19 +39,18 @@ import java.text.SimpleDateFormat;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
-    private Button SearchBtn;
-    private TextView ConnectTx;
+    private Button searchBtn;
+    private TextView connectTx;
     private MatrixGridView matrixGridView;
 
     //Bluetooth
     public BLEClient mBLEClient;
-    boolean HasConnected = false;
+    boolean hasConnected = false;
     //File
-    private CsvOperate Resistance;
+    private CsvOperate resistance;
     private CsvOperate logFile;
     DecimalFormat df = new DecimalFormat(".00");
     PiecewiseLinearFunction[] functions = new PiecewiseLinearFunction[resistanceCount];
-    Double[] rowData = new Double[resistanceCount * 2];
 
     //Handler for main thread
     private class MyHandler extends Handler {
@@ -67,31 +67,38 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             if (activity != null) {
                 switch (msg.what) {
                     case Constants.CONNECT_SUCCESS:
-                        HasConnected = true;
-                        SearchBtn.setEnabled(false);
+                        hasConnected = true;
+                        searchBtn.setEnabled(false);
                         break;
-                    case Constants.SHOWCHART:
-                        ConnectTx.setText("Connected");
-                        SearchBtn.setEnabled(false);
+                    case Constants.GATT_SERVICES_DISCOVERED:
+                        Toast.makeText(activity, "连接成功！！", Toast.LENGTH_LONG).show();
+                        connectTx.setText("Connected");
+                        searchBtn.setEnabled(false);
+                        byte[] data = {0x31, (byte) 0x92};
+                        mBLEClient.writeBLECharacteristicValue(data);
                         break;
-                    case Constants.SHOWLENGTH:
+                    case Constants.DISPLAY_SAVE:
                         int idx = 0;
-                        for (int i = 0; i < 8; i++) {
-                            for (int j = 0; j < 3; j++) {
-                                double evaluate = functions[idx].evaluate(BLEClient.checklength[idx]);
+                        Double[] rowData = new Double[resistanceCount * 2];
+                        int [] checklength =(int[]) msg.obj;
+                        for (int i = 0; i < 3; i++) {
+                            for (int j = 0; j < 8; j++) {
+                                double evaluate = functions[idx].evaluate((double) checklength[idx]);
                                 matrixGridView.setValue(i, j, evaluate);
-                                rowData[idx] = BLEClient.checklength[idx];
+                                rowData[idx] = (double) checklength[idx];
                                 rowData[idx + resistanceCount] = evaluate;
                                 idx++;
                             }
                         }
                         //存储数据
-                        saveDataToFile();
+                        saveDataToFile(rowData);
                         break;
                     case Constants.READ_FAIL:
                         Toast.makeText(activity, "接收数据失败！！", Toast.LENGTH_LONG).show();
                         break;
-                    case Constants.Cmd_Start:
+                    case Constants.GATT_DISCONNECTED:
+                        connectTx.setText("UnConnect");
+                        Toast.makeText(activity, "和设备断开连接！！", Toast.LENGTH_LONG).show();
                         break;
                     case Constants.Cmd_Stop:
                         break;
@@ -100,9 +107,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
-    private void saveDataToFile() {
+
+
+    private void saveDataToFile(Double[] rowData) {
         for (int i = 0; i < rowData.length; i++) {
-            WriteDoubleFramesToFile(rowData[i], i, rowData.length, Resistance);
+            WriteDoubleFramesToFile(rowData[i], i, rowData.length, resistance);
         }
     }
 
@@ -113,14 +122,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_operate);
 
-        SearchBtn = findViewById(R.id.search_bt);
-        SearchBtn.setOnClickListener(this);
-        ConnectTx = findViewById(R.id.tv_Connect);
+        searchBtn = findViewById(R.id.search_bt);
+        searchBtn.setOnClickListener(this);
+        connectTx = findViewById(R.id.tv_Connect);
         matrixGridView = findViewById(R.id.matrixGridView);
 
         //File
         if (PermissionManage.verifyStoragePermissions(this)) {
-            Resistance = new CsvOperate(Constants.Resistance, false, this,true);
+            resistance = new CsvOperate(Constants.Resistance, false, this,true);
             logFile = new CsvOperate(Constants.LogFile, false, this,false);
             String[][] rawData = ExcelUtils.readFromExcel("3x8阵列输出.xlsx");
             functions = getFunctions(rawData);
@@ -162,7 +171,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
 
     public void onClick(View v) {
-        if (v == SearchBtn) {
+        if (v == searchBtn) {
             if (PermissionManage.verifyBluetoothPermissions(this))
                 mBLEClient.searchDevice();
 
@@ -200,6 +209,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     }
 
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_CODE_LOCATION_SETTINGS) {
@@ -219,18 +229,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     @Override
     public void onDestroy() {
-        Resistance.closeFile();
+        resistance.closeFile();
         super.onDestroy();
     }
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
+            //不符合流程的非正常退出，需要提前关闭
+            BLEClient.runalways = false;
+            mBLEClient.close();
 
-            if (HasConnected) {
-
-            }
-
+            System.exit(0);
             finish();
             return false;
         }
@@ -253,6 +263,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
         return;
     }
+
 
 
 }

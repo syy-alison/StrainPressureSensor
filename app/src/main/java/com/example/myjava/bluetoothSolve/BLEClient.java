@@ -1,68 +1,77 @@
 package com.example.myjava.bluetoothSolve;
 
+
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothSocket;
-import android.content.BroadcastReceiver;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
+import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.IntentFilter;
+import android.os.Build;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 import android.widget.Toast;
 
-import com.example.myjava.dataManage.CsvOperate;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.lang.reflect.Method;
-import java.text.DecimalFormat;
+import com.example.myjava.dataManage.CsvOperate;
+import com.example.myjava.dataManage.FileOperation;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.UUID;
 
+
 public class BLEClient {
-    public static double[] checklength = new double[100];
-    public static int countsolve = -1;
-    public static int forshow = 0;
+    //TODO 目前只考虑用于一个Activity，未来要用于多个Activity之前要检查过！！！
 
-    DecimalFormat df1 = new DecimalFormat(".00");
-
-    public static boolean hear_data = false;
-    private boolean runalways = false;
-    private boolean availableflag = false;
     // constants
-    private static final int REQUEST_ENABLE_BT = 2;
-    private static final String SPP_UUID = "00001101-0000-1000-8000-00805F9B34FB"; // SerialPortServiceClass_UUID
-    private static final int numsInOneFrame = 144;// for PH sensor,final data in one frame,when  cmd==0x3A || 0x3B
-    private static final int bytesInOneFrame = 145;// raw data in one frame
-    private static final int maxFrames = 435;
+    // constants
+    private static final String ecCharacteristicNotifyUUID = "0000fff1-0000-1000-8000-00805f9b34fb";
+    private static final String ecCharacteristicWriteUUID = "0000fff2-0000-1000-8000-00805f9b34fb";
+    public static final int REQUEST_ENABLE_BT = 2;
+    private static boolean connectFlag = false;
+    private static BluetoothGattCharacteristic ecCharacteristicWrite;
 
     // member variables
-    private Activity uiActivity = null;
-    private Handler uiHandler = null;
+    private Activity uiActivity;
+    private Handler uiHandler;
     private static BluetoothAdapter mBluetoothAdapter;
-    private static BluetoothDevice mBluetoothDevice;
-    private List<BluetoothDevice> BLDeviceList = new ArrayList<BluetoothDevice>();
+    private List<BluetoothDevice> BLDeviceList = new ArrayList<>();
+    private static BluetoothGatt mBluetoothGatt;
     private AlertDialog BLDialog = null;
-    private static BluetoothSocket btSocket;
-    public static boolean RunningFlag = false; //for the thread of communication1&2
-    private static InputStream mmInStream;
-    private static OutputStream mmOutStream;
+    private static BluetoothGattCharacteristic mCharacteristic;
 
-    //final result for the object of the class
-    public static int sizeOfResult = -1; // frame numbers in "result"
-    public static double[][] result = new double[maxFrames][numsInOneFrame]; // transfer
-    public static boolean DataReady = false; // the final data is ready or not
+    private static FileOperation lastConnectDeviceFile;
+    private static String lastConnectDeviceAddress = null;
+    private static boolean connectLastDevice = false;
+    private boolean bStart = false;
+    private static byte[] oneFrame = new byte[74];
+    ProgressDialog mProgressDialog;
+    private static boolean bDisplay = false;
+    private static int j = 0;
 
-    public static boolean startRec1 = false;
 
-    private CsvOperate logfile;
+
+    public static boolean runalways = false;
+
+    volatile int framesHasReadTest = 0;
+
+
+    private static CsvOperate logfile;//the number of frames we have read
 
     // construct function
     public BLEClient(Activity newAct, Handler newHandler, CsvOperate csvOperate) {
@@ -70,370 +79,310 @@ public class BLEClient {
         uiHandler = newHandler;
         logfile = csvOperate;
 
-        initBLE();//get BluetoothAdapter and open Bluetooth.
+        // File
+        if (lastConnectDeviceAddress == null) {
+            lastConnectDeviceFile = new FileOperation("LastConnectDeviceFile.txt", uiActivity);
+            lastConnectDeviceAddress = lastConnectDeviceFile.readLineinFile();
+            Log.i("ZQQ", "LastConnectDeviceAddress = " + lastConnectDeviceAddress);
+            lastConnectDeviceFile.closeFile();
+        }
 
-        // bluetooth broacastReceiver
-        IntentFilter intent = new IntentFilter();
-        intent.addAction(BluetoothDevice.ACTION_FOUND);
-        intent.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
-        intent.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
-        uiActivity.registerReceiver(mBLReceiver, intent);
-
+        (new initBLEThread()).start();
     }
 
+    private class initBLEThread extends Thread {
 
-    // initial BLE
-    public void initBLE() {
-        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (mBluetoothAdapter == null) {  // Device does not support Bluetooth
-            new AlertDialog.Builder(uiActivity).setTitle("No BluetoothAdapter").show();
-        } else {                            // Device supports Bluetooth
-            if (!mBluetoothAdapter.isEnabled()) {    // Bluetooth not opened
-                new AlertDialog.Builder(uiActivity)
-                        .setTitle("Open bluetooth first")
-                        .setPositiveButton("Ok",
-                                new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) { // go to open Bluetooth
-                                        Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                                        uiActivity.startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-                                    }
-                                }).show();
-            } // if Bluetooth has opened, shows nothing!
+        @Override
+        public void run() {
+
+            final BluetoothManager bluetoothManager = (BluetoothManager) uiActivity.getSystemService(Context.BLUETOOTH_SERVICE);
+            mBluetoothAdapter = bluetoothManager.getAdapter();
+            if (mBluetoothAdapter == null) {  // Device does not support Bluetooth
+                new AlertDialog.Builder(uiActivity).setTitle("No BluetoothAdapter").show();
+            } else {                            // Device supports Bluetooth
+                if (!mBluetoothAdapter.isEnabled()) {    // Bluetooth not opened
+
+                    //Log.i("ZQQ","蓝牙还未开启");
+                    Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                    uiActivity.startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+                } else {
+                    //Log.i("ZQQ","蓝牙已打开");
+                    bStart = true;
+
+
+                }
+            }
+
         }
 
     }
+
+    private static final long SCAN_PERIOD = 10000;// Stops scanning after 10 seconds.
 
     public void searchDevice() {
-        if (mBluetoothAdapter.isEnabled()) {
-            Message msg = Message.obtain();
-            msg.what = Constants.SEARCHING_DEVICE;
-            uiHandler.sendMessage(msg);
+        // if(bStart) {
+        mProgressDialog = ProgressDialog.show(uiActivity, "搜索与连接设备", "正在搜索设备……");
+        mBluetoothAdapter.stopLeScan(mLeScanCallback);
 
-            if (mBluetoothAdapter.isDiscovering()) {  //start searching device
-                mBluetoothAdapter.cancelDiscovery();
+        BLDeviceList.clear();// clear device list
+
+        boolean flag = mBluetoothAdapter.startLeScan(mLeScanCallback);
+        Log.i("ZQQ", "是否开始搜索：" + String.valueOf(flag));
+
+        Timer timer = new Timer();
+        TimerTask task = new TimerTask() {
+            public void run() {
+                Looper.prepare();
+                mBluetoothAdapter.stopLeScan(mLeScanCallback);
+                Log.i("ZQQ", "结束扫描");
+                onScanFinished();
+                Looper.loop();
             }
-            BLDeviceList.clear();// clear device list
-            boolean flag = mBluetoothAdapter.startDiscovery();
-            Log.i("PS", "是否开始搜索：" + String.valueOf(flag));
+        };
+        timer.schedule(task, SCAN_PERIOD);// Stops scanning after a pre-defined scan period.
+        // }
+    }
 
-        } else {                                 // Bluetooth not opened
-            new AlertDialog.Builder(uiActivity)
-                    .setTitle("Bluetooth is still closed!")
-                    .setMessage("Please open Bluetooth first and then press the button again.")
-                    .setPositiveButton("Ok",
+    // Device scan callback.
+    private BluetoothAdapter.LeScanCallback mLeScanCallback =
+            new BluetoothAdapter.LeScanCallback() {
+                @Override
+                public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) { //当一个BLE设备被找到
+
+                    Log.i("ZQQ", device.getName() + "  " + device.getAddress());
+
+                    if (device.getAddress().equals(lastConnectDeviceAddress)) {
+                        mBluetoothAdapter.stopLeScan(mLeScanCallback);
+                        mBluetoothGatt = device.connectGatt(uiActivity, false, mGattCallback);
+                        connectLastDevice = true;
+                        mProgressDialog.dismiss();
+                    } else {
+                        if (!BLDeviceList.contains(device)) {  // add to device list
+                            BLDeviceList.add(device);
+                        }
+                    }
+
+                }
+            };
+
+    private void onScanFinished() {
+        if (!connectLastDevice) { //没有在搜索设备过程中找到上一次连接成功的设备
+
+            mProgressDialog.dismiss();
+
+            String[] stringList = getStringListFromDevice();
+
+            if (BLDialog != null) BLDialog.dismiss();
+
+            BLDialog = new AlertDialog.Builder(uiActivity)
+                    .setTitle("请选择设备：")
+                    .setItems(stringList,
                             new DialogInterface.OnClickListener() {
                                 @Override
-                                public void onClick(DialogInterface dialog, int which) { // go to open Bluetooth
-                                    Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-
-                                    uiActivity.startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+                                public void onClick(DialogInterface dialog, int which) {
+                                    Toast.makeText(uiActivity, BLDeviceList.get(which).getName(), Toast.LENGTH_SHORT).show();
+                                    handleChosenDevice(which);
                                 }
-                            }).show();
+
+                                private void handleChosenDevice(int which) {
+                                    BluetoothDevice mBLTdevice = BLDeviceList.get(which);
+                                    mBluetoothGatt = mBLTdevice.connectGatt(uiActivity, false, mGattCallback);
+                                    lastConnectDeviceAddress = mBLTdevice.getAddress();
+                                    logfile.writeStringWithEOL("handleChosenDevice" + lastConnectDeviceAddress);
+                                }
+                            }).create();
+            BLDialog.show();
+        }
+
+    }
+
+    private static void setMtu() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            mBluetoothGatt.requestMtu(247);
         }
     }
 
-    BroadcastReceiver mBLReceiver = new BroadcastReceiver() {
+    private String[] getStringListFromDevice() {
+
+        int len = BLDeviceList.size();
+        String str[] = new String[len];
+
+        for (int idx = 0; idx < len; idx++) {
+            BluetoothDevice device = BLDeviceList.get(idx);
+
+            str[idx] = device.getName() + "\n"
+                    + device.getAddress() + "\n";
+        }
+
+        return str;
+    }
+
+    // Implements callback methods for GATT events that the app cares about.  For example,
+    // connection change and services discovered.
+    private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
 
         @Override
-        public void onReceive(Context context, Intent intent) {
-
-            String action = intent.getAction();
-            Log.i("PS", "收到广播" + action);
-
-            // device found
-            if (action.equals(BluetoothDevice.ACTION_FOUND)) {
-
-                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                Log.i("PS", device.getName() + "  " + device.getAddress());
-                if (device.getBondState() == BluetoothDevice.BOND_NONE) {
-                    Log.i("PS", "BOND_NONE");
-                }
-                if (device.getBondState() == BluetoothDevice.BOND_BONDING) {
-                    Log.i("PS", "BOND_BONDING");
-                }
-                if (device.getBondState() == BluetoothDevice.BOND_BONDED) {
-                    Log.i("PS", "BOND_BONDED");
-                }
-                // add to device list
-                BLDeviceList.add(device);
-
-                // add to listView
-                String[] stringList = getStringListFromDevice();
-
-
-                // dialog build
-                if (BLDialog != null)
-                    BLDialog.dismiss();
-
-                BLDialog = new AlertDialog.Builder(uiActivity)
-                        .setTitle("请选择设备：")
-                        .setItems(stringList,
-                                new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-
-                                        Toast.makeText(uiActivity,
-                                                BLDeviceList.get(which).getName(),
-                                                Toast.LENGTH_SHORT).show();
-                                        handleChosenDevice(which);
-                                    }
-
-                                    private void handleChosenDevice(int which) {
-                                        BluetoothDevice mBLTdevice = BLDeviceList.get(which);
-                                        mBluetoothDevice = mBLTdevice;
-                                        try {
-                                            logfile.writeStringWithEOL("handleChosenDevice bondState: " + mBLTdevice.getBondState());
-                                            if (mBLTdevice.getBondState() == BluetoothDevice.BOND_NONE) {
-                                                Boolean returnValue = false;
-                                                Method createBondMethod = BluetoothDevice.class.getMethod("createBond");
-                                                returnValue = (Boolean) createBondMethod.invoke(mBLTdevice);
-                                                Message msg = Message.obtain();
-                                                msg.what = Constants.BONDING_DEVICE;
-                                                uiHandler.sendMessage(msg);
-                                            } else if (mBLTdevice.getBondState() == BluetoothDevice.BOND_BONDED) {
-                                                logfile.writeStringWithEOL("bluetoothConnect");
-                                                bluetoothConnect(mBLTdevice);
-
-                                            } else if (mBLTdevice.getBondState() == BluetoothDevice.BOND_BONDING) {
-                                                Message msg = Message.obtain();
-                                                msg.what = Constants.BONDING_DEVICE;
-                                                uiHandler.sendMessage(msg);
-                                            }
-                                        } catch (Exception e) {
-                                            logfile.writeStringWithEOL("handleChosenDevice exe: " + e);
-                                        }
-                                    }
-
-                                }).create();
-                BLDialog.show();
-
-            } else if (action.equals(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)) {
+        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            String intentAction;
+            logfile.writeStringWithEOL("onConnectionStateChange" + newState);
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+                boolean discoverServices = gatt.discoverServices();
+                logfile.writeStringWithEOL("discoverServices:" + discoverServices);
+                intentAction = Constants.ACTION_GATT_CONNECTED;
                 Message msg = Message.obtain();
-                msg.what = Constants.DISCOVERY_FINISHED;
+                msg.what = Constants.GATT_SERVICES_DISCOVERED;
                 uiHandler.sendMessage(msg);
-            } else if (action.equals(BluetoothDevice.ACTION_BOND_STATE_CHANGED)) {
-                Log.i("PS", "配对状态改变");
-                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                if (device == mBluetoothDevice) {
-                    if (device.getBondState() == BluetoothDevice.BOND_NONE) {
-                        Message msg = Message.obtain();
-                        msg.what = Constants.CONNECT_FAIL;
-                        uiHandler.sendMessage(msg);
-                    } else if (device.getBondState() == BluetoothDevice.BOND_BONDED) {
-                        Log.i("PS", "从未配对变已配对成功！");
-                        bluetoothConnect(device);
+                lastConnectDeviceFile.writeFile(lastConnectDeviceAddress); //把本次连接成功的设备地址写入内部文件
+                lastConnectDeviceFile.closeFile();
+                connectFlag = true;
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                gatt.close();
+                if (connectFlag) {
+                    intentAction = Constants.ACTION_GATT_DISCONNECTED;
+                    Log.i("ZQQ", "Disconnected from GATT server.");
+                    Message msg = Message.obtain();
+                    msg.what = Constants.GATT_DISCONNECTED;
+                    uiHandler.sendMessage(msg);
+                }
+                connectFlag = false;
+            }
+        }
 
-                    } else if (device.getBondState() == BluetoothDevice.BOND_BONDING) {
-                        Message msg = Message.obtain();
-                        msg.what = Constants.BONDING_DEVICE;
-                        uiHandler.sendMessage(msg);
+        @Override
+        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            logfile.writeStringWithEOL("onServicesDiscovered" + status);
+            super.onServicesDiscovered(gatt, status);
+            mBluetoothGatt = gatt;
+            List<BluetoothGattService> bluetoothGattServices = mBluetoothGatt.getServices();
+            new Thread(() -> {
+                try {
+                    for (BluetoothGattService service : bluetoothGattServices) {
+                        Log.e("ble-service", "UUID=" + service.getUuid().toString());
+                        List<BluetoothGattCharacteristic> listGattCharacteristic = service.getCharacteristics();
+                        for (BluetoothGattCharacteristic characteristic : listGattCharacteristic) {
+                            logfile.writeStringWithEOL("ble-char" + "UUID=:" + characteristic.getUuid().toString());
+
+                            if (characteristic.getUuid().toString().equals(ecCharacteristicNotifyUUID)) {
+                                logfile.writeStringWithEOL("notifyBLECharacteristicValueChange:" + characteristic.getUuid().toString());
+                                notifyBLECharacteristicValueChange(characteristic);
+                            }
+                            if (characteristic.getUuid().toString().equals(ecCharacteristicWriteUUID)) {
+                                ecCharacteristicWrite = characteristic;
+                            }
+
+                        }
                     }
+                } catch (Throwable ignored) {
                 }
-            }
-
+            }).start();
+            new Thread(() -> {
+                try {
+                    Thread.sleep(300);
+                    setMtu();
+                } catch (Throwable ignored) {
+                }
+            }).start();
         }
 
-        private String[] getStringListFromDevice() {
-            int len = BLDeviceList.size();
-            String str[] = new String[len];
-
-            for (int idx = 0; idx < len; idx++) {
-                BluetoothDevice device = BLDeviceList.get(idx);
-
-                if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
-                    str[idx] = "未配对设备：" + device.getName() + "\n"
-                            + device.getAddress() + "\n";
-                } else {
-                    str[idx] = "已配对设备：" + device.getName() + "\n"
-                            + device.getAddress() + "\n";
-                }
+        @Override
+        public void onCharacteristicRead(BluetoothGatt gatt,
+                                         BluetoothGattCharacteristic characteristic,
+                                         int status) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
 
             }
-            return str;
         }
 
+        @Override
+        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+            super.onMtuChanged(gatt, mtu, status);
+            if (BluetoothGatt.GATT_SUCCESS == status) {
+                Log.e("BLEService", "onMtuChanged success MTU = " + mtu);
+            } else {
+                Log.e("BLEService", "onMtuChanged fail ");
+            }
+        }
+
+        @Override
+        public void onCharacteristicChanged(BluetoothGatt gatt,
+                                            BluetoothGattCharacteristic characteristic) {
+            byte[] data = characteristic.getValue();
+            //如果连接设备发送数据到手机端，将通过这个函数获取数据。
+            logfile.writeStringWithEOL("onCharacteristicChanged data length" + data.length);
+            if(data[0] == 0x31 && data[73] == (byte) 0x92) {
+                System.arraycopy(data, 0, oneFrame, 0, data.length);
+                handle_test();
+            }
+        }
     };
 
-    // get btSocket
-    private void bluetoothConnect(BluetoothDevice device) {
-
-        UUID uuid = UUID.fromString(SPP_UUID);
-        try {
-            btSocket = device.createRfcommSocketToServiceRecord(uuid);
-
-        } catch (IOException e) {
-            e.printStackTrace();
-            Log.i("PS", "get socket failed!");
+    public static void notifyBLECharacteristicValueChange(BluetoothGattCharacteristic characteristic) {
+        boolean res = mBluetoothGatt.setCharacteristicNotification(characteristic, true);
+        logfile.writeStringWithEOL("notifyBLECharacteristicValueChange:" + res);
+        if (!res) {
+            return;
         }
-
-        if (btSocket == null) {
-            Message msg = Message.obtain();
-            msg.what = Constants.CONNECT_FAIL;
-            uiHandler.sendMessage(msg);
-        } else {
-            Log.i("PS", device.getName() + " get socket successd!");
+        for (BluetoothGattDescriptor dp : characteristic.getDescriptors()) {
+            dp.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            mBluetoothGatt.writeDescriptor(dp);
         }
-
-        (new openSocketThread()).start();
-        try {
-            mmInStream = btSocket.getInputStream();
-            mmOutStream = btSocket.getOutputStream();
-        } catch (IOException connectException) {
-        }
-
-        runalways = true;
-        hear_data = true;
-
     }
 
-    private class openSocketThread extends Thread {
-
-        @Override
-        public void run() {
-            // Cancel discovery because it will slow down the connection
-
-            mBluetoothAdapter.cancelDiscovery();
-            if (!btSocket.isConnected()) {
-                try {   // Connect the device through the socket. This will block until it succeeds or throws an exception
-                    btSocket.connect();
-                    Log.i("PS", "has executed connectSocket");
-
-                } catch (IOException connectException) {
-                    Log.i("PS", "connectSocket IOException");
-                    Message msg = Message.obtain();
-                    msg.what = Constants.CONNECT_FAIL;
-                    //ps uiHandler.sendMessage(msg); // Unable to connect; close the socket and get out
-                    try {
-                        btSocket.close();
-                        Log.i("PS", "close Socket");
-                    } catch (IOException closeException) {
+    public void writeBLECharacteristicValue(byte[] byteArray) {
+        logfile.writeStringWithEOL("writeBLECharacteristicValue" + byteArray[0] +"and" +  byteArray[1]);
+        Timer timer = new Timer();
+        TimerTask task = new TimerTask() {
+            public void run() {
+                if (ecCharacteristicWrite != null) {
+                    ecCharacteristicWrite.setValue(byteArray);
+                    //设置回复形式
+                    ecCharacteristicWrite.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+                    //开始写数据
+                    if (mBluetoothGatt != null) {
+                        mBluetoothGatt.writeCharacteristic(ecCharacteristicWrite);
+                        logfile.writeStringWithEOL("writeBLECharacteristicValue start");
                     }
-                    return;
                 }
             }
-            //ps  uiHandler.sendMessage(msg);
-            (new CommunicationThreadReady()).start();
-            Message msg = Message.obtain();
-            Log.i("PS", "打开了一直接受数据的线程");
-            msg.what = Constants.SHOWCHART;
-            uiHandler.sendMessage(msg);
-            Log.i("PS", "发送成功");
-        }
+        };
+        timer.schedule(task, 10000, 90000);// Stops scanning after a pre-defined
 
     }
 
-    private class CommunicationThreadReady extends Thread {
-        //transfer
-        private static final int framesToRead = 100;// can be adjusted!
-        final static int RDSTATE_START = 0;
-        final static int RDSTATE_DATA = 7;
-        final static int RDSTATE_FIN = 8;
-        int readState = RDSTATE_START;
-        int framesHasRead = 0; //the number of frames we have read
-        byte[] oneFrame = new byte[bytesInOneFrame]; // header(2A) + PGA(01) + 7 remaining data(7*2bytes)
-        int frameIndex = 0; //index in one frame
 
-        private int toInt(byte b) {
-            return (0xff & b);
+    private void handle_test() {
+        int[] resultTest = new int[Constants.resistanceCount];
+
+        int num1, num2, num3, num;
+        for (int idx = 0; idx < Constants.resistanceCount; idx++) {
+            num1 = toInt(oneFrame[3 * idx + 3]);
+            num2 = toInt(oneFrame[3 * idx + 2]);
+            num3 = toInt(oneFrame[3 * idx + 1]);
+            num = num3 * 256 * 256 + num2 * 256 + num1;
+            resultTest[idx] = num;
         }
-
-        @Override
-        public void run() {
-            Log.i("PS", "真的进到run里面了");
-            read_data();
-        }
-
-        //以下是读取数据的部分
-        //1读取transfer
-        private void read_data() {
-            DataReady = false;
-            byte[] buffer = new byte[5];
-            while (hear_data) {
-                // buffer store for the stream
-                int bytes = 0; // bytes number returned from read()
-                try {
-                    for (int t = 0; t < 5; t++) {
-                        bytes = mmInStream.read(buffer, t, 1);
-                    }
-                } catch (IOException e) {
-                    Log.i("PS", "IOException when read Inputstream");
-                    Log.i("PS", e.toString());
-                    hear_data = false;
-                    Message msg1 = Message.obtain();
-                    msg1.what = Constants.READ_FAIL;
-                    uiHandler.sendMessage(msg1);
-                }
-                // break;//这个问题好像导致了不能完整读出inputstream   后面再来分析
-
-
-                // read every b in buff handle in frame
-                for (int idx = 0; idx < 5; idx++) {
-                    byte b = buffer[idx];
-                    Log.i("read_data", String.valueOf(b));
-                    // state machine
-                    switch (readState) {
-                        case RDSTATE_START:
-                            if (b == (byte) 0x2A) {
-                                readState = RDSTATE_DATA;
-                                frameIndex = 0;
-                                oneFrame[frameIndex] = b;
-                                frameIndex++;
-                            }
-                            break;
-
-                        case RDSTATE_DATA:
-                            oneFrame[frameIndex] = b;
-                            frameIndex++;
-                            if (frameIndex == bytesInOneFrame) { // "data" has already been read all.
-                                handle_data();
-                                readState = RDSTATE_START;
-                            }
-                            break;
-
-                        case RDSTATE_FIN:
-                            break;
-
-                    }// end of state machine
-
-                    if (!hear_data) break;
-                }// end of read every b in buff
-            }
-        }
-
-        private void handle_data() {
-            if (frameIndex != bytesInOneFrame) {
-                return;
-            } else {
-                int num1, num2;
-                int idx = 0;
-                for (int i = 1; i < bytesInOneFrame; i += 2) {
-                    num1 = toInt(oneFrame[i]);
-                    num2 = toInt(oneFrame[i + 1]);
-                    checklength[idx++] = num1 + num2 * 256;
-                    ;
-                }
-                Message msg = Message.obtain();
-                msg.what = Constants.SHOWLENGTH;
-                uiHandler.sendMessage(msg);
-                Message msg1 = Message.obtain();
-                msg1.what = Constants.Cmd_Start;
-                uiHandler.sendMessage(msg1);
-            }
-            framesHasRead++;
-            if (framesHasRead == framesToRead) {
-                countsolve++;
-                // solve.writeToExcel();//change
-
-                framesHasRead = 0;
-                byte buffer = 0;
-                try {
-                    mmOutStream.write(buffer);
-                    mmOutStream.flush();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
+        framesHasReadTest++;
+        Message msg = Message.obtain();
+        msg.obj = resultTest; //直接把这一帧（7个数据）的数据传出去
+        msg.arg1 = framesHasReadTest;
+        msg.what = Constants.DISPLAY_SAVE;
+        uiHandler.sendMessage(msg);
     }
+
+
+    public void close() {
+
+        if (mBluetoothGatt == null) {
+            return;
+        }
+        mBluetoothGatt.close();
+        mBluetoothGatt = null;
+
+    }
+
+    private int toInt(byte b) {
+        return (0xff & b);
+    }
+
+
 }
