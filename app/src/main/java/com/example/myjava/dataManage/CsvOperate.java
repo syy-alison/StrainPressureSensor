@@ -1,10 +1,10 @@
 package com.example.myjava.dataManage;
 
-import static com.example.myjava.bluetoothSolve.Constants.resistanceCount;
-
 import android.content.Context;
 import android.os.Environment;
 import android.widget.Toast;
+
+import com.example.myjava.bluetoothSolve.MatrixConfig;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -83,11 +83,11 @@ public class CsvOperate {
 
     private void writeDataHead(){
         writeStringWithoutEOL("");
-        for (int i = 0; i < resistanceCount; i++) {
+        for (int i = 0; i < MatrixConfig.getResistanceCount(); i++) {
             writeStringWithoutEOL("R" + i);
         }
-        for (int i = 0; i < resistanceCount; i++) {
-            if (i == resistanceCount - 1) {
+        for (int i = 0; i < MatrixConfig.getResistanceCount(); i++) {
+            if (i == MatrixConfig.getResistanceCount() - 1) {
                 writeStringWithEOL("pressure" + i);
             } else {
                 writeStringWithoutEOL("pressure" + i);

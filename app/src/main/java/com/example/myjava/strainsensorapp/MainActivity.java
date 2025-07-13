@@ -1,23 +1,19 @@
 package com.example.myjava.strainsensorapp;
 
-import static com.example.myjava.bluetoothSolve.Constants.pointCount;
-import static com.example.myjava.bluetoothSolve.Constants.resistanceCount;
-
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.provider.Settings;
 
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -25,12 +21,14 @@ import android.widget.Toast;
 import com.example.myjava.R;
 import com.example.myjava.bluetoothSolve.BLEClient;
 import com.example.myjava.bluetoothSolve.Constants;
+import com.example.myjava.bluetoothSolve.MatrixConfig;
 import com.example.myjava.dataManage.CsvOperate;
 import com.example.myjava.dataManage.ExcelUtils;
 import com.example.myjava.math.PiecewiseLinearFunction;
 import com.example.myjava.permissionManage.PermissionManage;
 
 
+import org.apache.commons.collections4.CollectionUtils;
 
 import java.lang.ref.WeakReference;
 import java.text.DecimalFormat;
@@ -42,6 +40,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Button searchBtn;
     private TextView connectTx;
     private MatrixGridView matrixGridView;
+    private Switch switchCalibratedData;
+    private boolean showCalibratedData;
 
     //Bluetooth
     public BLEClient mBLEClient;
@@ -50,7 +50,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private CsvOperate resistance;
     private CsvOperate logFile;
     DecimalFormat df = new DecimalFormat(".00");
-    PiecewiseLinearFunction[] functions = new PiecewiseLinearFunction[resistanceCount];
+    PiecewiseLinearFunction[] functions = new PiecewiseLinearFunction[MatrixConfig.getResistanceCount()];
 
     //Handler for main thread
     private class MyHandler extends Handler {
@@ -71,7 +71,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         searchBtn.setEnabled(false);
                         break;
                     case Constants.GATT_SERVICES_DISCOVERED:
-                        Toast.makeText(activity, "连接成功！！", Toast.LENGTH_LONG).show();
+                        String deviceName = (String) msg.obj;
+                        Toast.makeText(activity, "连接成功：" + deviceName + "！！", Toast.LENGTH_LONG).show();
                         connectTx.setText("Connected");
                         searchBtn.setEnabled(false);
                         byte[] data = {0x31, (byte) 0x92};
@@ -79,14 +80,22 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         break;
                     case Constants.DISPLAY_SAVE:
                         int idx = 0;
-                        Double[] rowData = new Double[resistanceCount * 2];
-                        int [] checklength =(int[]) msg.obj;
-                        for (int i = 0; i < 3; i++) {
-                            for (int j = 0; j < 8; j++) {
-                                double evaluate = functions[idx].evaluate((double) checklength[idx]);
-                                matrixGridView.setValue(i, j, evaluate);
+                        Double[] rowData = new Double[MatrixConfig.getResistanceCount() * 2];
+                        int[] checklength = (int[]) msg.obj;
+
+                        for (int i = 0; i < MatrixConfig.getRows(); i++) {
+                            for (int j = 0; j < MatrixConfig.getColumns(); j++) {
+                                double showData = 0;
+                                // 如果当前索引在可用数据范围内
                                 rowData[idx] = (double) checklength[idx];
-                                rowData[idx + resistanceCount] = evaluate;
+                                if (showCalibratedData) {
+                                    showData = functions[idx].evaluate((double) checklength[idx]);
+                                    rowData[idx + MatrixConfig.getResistanceCount()] = showData;
+                                } else {
+                                    showData = (double) checklength[idx];
+                                }
+
+                                matrixGridView.setValue(i, j, showData);
                                 idx++;
                             }
                         }
@@ -108,7 +117,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
 
-
     private void saveDataToFile(Double[] rowData) {
         for (int i = 0; i < rowData.length; i++) {
             WriteDoubleFramesToFile(rowData[i], i, rowData.length, resistance);
@@ -122,43 +130,77 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_operate);
 
+        // 接收从SettingsActivity传递的矩阵参数
+        Intent intent = getIntent();
+        if (intent != null) {
+            int matrixRows = intent.getIntExtra("matrix_rows", 16);
+            int matrixColumns = intent.getIntExtra("matrix_columns", 16);
+            int pointCount = intent.getIntExtra("point_count", 10);
+            // 设置矩阵大小到MatrixConfig
+            MatrixConfig.setMatrixSize(matrixRows, matrixColumns);
+            // 设置校准点数到MatrixConfig
+            MatrixConfig.setPointCount(pointCount);
+        }
+
         searchBtn = findViewById(R.id.search_bt);
         searchBtn.setOnClickListener(this);
         connectTx = findViewById(R.id.tv_Connect);
         matrixGridView = findViewById(R.id.matrixGridView);
+        switchCalibratedData = findViewById(R.id.switch_calibrated_data);
+
+        // 初始化boolean变量，与开关默认状态保持一致
+        showCalibratedData = switchCalibratedData.isChecked();
+
+        String excelFileName = MatrixConfig.getRows() + "x" + MatrixConfig.getColumns() + "阵列输出.xlsx";
+
+        // 为开关添加监听器
+        switchCalibratedData.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            // 当开关状态改变时，设置boolean变量的值
+            showCalibratedData = isChecked;
+            if(showCalibratedData && functions == null){
+                // 校准文件不存在，提示用户并关闭开关
+                Toast.makeText(this, excelFileName + "不存在或者缺失，无法显示校准后的数据" , Toast.LENGTH_LONG).show();
+                switchCalibratedData.setChecked(false);
+                showCalibratedData = false;
+            }
+        });
 
         //File
         if (PermissionManage.verifyStoragePermissions(this)) {
             resistance = new CsvOperate(Constants.Resistance, false, this,true);
             logFile = new CsvOperate(Constants.LogFile, false, this,false);
-            String[][] rawData = ExcelUtils.readFromExcel("3x8阵列输出.xlsx");
+            
+            // 根据矩阵配置动态生成Excel文件名
+            String[][] rawData = ExcelUtils.readFromExcel(excelFileName);
             functions = getFunctions(rawData);
         }
+        
+        // 在MatrixConfig设置完成后创建BLEClient
         mBLEClient = new BLEClient(MainActivity.this, handler, logFile);
 
     }
 
     private PiecewiseLinearFunction[] getFunctions(String[][] rawData) {
         if (rawData == null) {
-            return new PiecewiseLinearFunction[resistanceCount];
+            return null;
         }
-        double[] yPoints = new double[pointCount];
-        double[] xPoints = new double[pointCount];
+        double[] yPoints = new double[MatrixConfig.getPointCount()];
+        double[] xPoints = new double[MatrixConfig.getPointCount()];
 
-        PiecewiseLinearFunction[] result = new PiecewiseLinearFunction[resistanceCount];
+        PiecewiseLinearFunction[] result = new PiecewiseLinearFunction[MatrixConfig.getResistanceCount()];
 
-        for (int i = 0; i < pointCount; i++) {
+        for (int i = 0; i < MatrixConfig.getPointCount(); i++) {
             if (rawData[i][0] == null) {
-                continue;
+                return null;
             }
             yPoints[i] = Double.parseDouble(rawData[i][0]);
         }
         int idx = 0;
 
-        for (int j = 1; j <= resistanceCount; j++) {
-            for (int i = 0; i < pointCount; i++) {
+        for (int j = 1; j <= MatrixConfig.getResistanceCount(); j++) {
+            for (int i = 0; i < MatrixConfig.getPointCount(); i++) {
                 if (rawData[i][j] == null) {
-                    continue;
+                    return null;
                 }
                 xPoints[i] = Double.parseDouble(rawData[i][j]);
             }
@@ -263,7 +305,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
         return;
     }
-
 
 
 }

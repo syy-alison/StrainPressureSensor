@@ -6,49 +6,70 @@
     android:layout_height="match_parent"
     tools:context="com.example.myjava.strainsensorapp.MainActivity">
 
-    <RelativeLayout
-        android:id="@+id/relativelayout"
-        android:layout_width="400dp"
-        android:layout_height="500dp"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentBottom="true"
-        android:orientation="vertical"
-        tools:layout_editor_absoluteX="5dp"
-        tools:layout_editor_absoluteY="-1dp"
-        tools:ignore="MissingConstraints">
+    <!-- 顶部一行：按钮、文本、开关 -->
+    <Button
+        android:id="@+id/search_bt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="8dp"
+        android:text="Search"
+        android:textSize="12sp"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="8sp"
+        android:autoSizeMaxTextSize="14sp"
+        android:autoSizeStepGranularity="1sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- MatrixGridView 将被添加在这里 -->
+    <TextView
+        android:id="@+id/tv_Connect"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:text="NotConnect"
+        android:textSize="12sp"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="8sp"
+        android:autoSizeMaxTextSize="14sp"
+        android:autoSizeStepGranularity="1sp"
+        android:gravity="center"
+        app:layout_constraintStart_toEndOf="@+id/search_bt"
+        app:layout_constraintEnd_toStartOf="@+id/switch_calibrated_data"
+        app:layout_constraintTop_toTopOf="@+id/search_bt"
+        app:layout_constraintBottom_toBottomOf="@+id/search_bt" />
 
+    <Switch
+        android:id="@+id/switch_calibrated_data"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:checked="false"
+        android:text="显示校准后的数据"
+        android:textSize="10sp"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="8sp"
+        android:autoSizeMaxTextSize="12sp"
+        android:autoSizeStepGranularity="1sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/search_bt"
+        app:layout_constraintBottom_toBottomOf="@+id/search_bt" />
 
-        <TextView
-            android:id="@+id/tv_Connect"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="220dp"
-            android:layout_marginTop="29dp"
-            android:text="NotConnect" />
-
-        <Button
-            android:id="@+id/search_bt"
-            android:layout_width="150dp"
-            android:layout_height="50dp"
-            android:layout_alignBaseline="@+id/tv_Connect"
-            android:layout_alignBottom="@+id/tv_Connect"
-
-            android:text="Search device" />
-
-
-        <com.example.myjava.strainsensorapp.MatrixGridView
-            android:id="@+id/matrixGridView"
-            android:layout_width="match_parent"
-            android:layout_height="300dp"
-            android:layout_marginTop="100dp"
-            android:layout_weight="1" />
-
-
-
-    </RelativeLayout>
-
+    <!-- 中间：MatrixGridView -->
+    <com.example.myjava.strainsensorapp.MatrixGridView
+        android:id="@+id/matrixGridView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="5dp"
+        android:layout_marginEnd="5dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginBottom="16dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/search_bt"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
 </android.support.constraint.ConstraintLayout>

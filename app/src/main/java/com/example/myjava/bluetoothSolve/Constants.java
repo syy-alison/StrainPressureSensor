@@ -25,15 +25,4 @@ public class Constants {
 	public static final String Resistance = "PressureSensor原始数据与转化数据.csv";
 
 	public static final String LogFile = "PressureSensor日志.csv";
-	/**
-	 * 用于校准的点数量
-	 */
-	public static final int pointCount = 10;
-
-	/**
-	 * 用于校准的电阻数量
-	 */
-	public static final int  resistanceCount = 24;
-
-
 }

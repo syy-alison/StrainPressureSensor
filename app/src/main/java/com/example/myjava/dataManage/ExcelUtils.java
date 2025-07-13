@@ -5,6 +5,8 @@ package com.example.myjava.dataManage;
 import android.os.Environment;
 import android.util.Log;
 
+import com.example.myjava.bluetoothSolve.MatrixConfig;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -29,11 +31,17 @@ public class ExcelUtils {
         parentDir = Environment.getExternalStorageDirectory();
         mFile = new File(parentDir, filename);
 
+        // 检查文件是否存在
+        if (!mFile.exists()) {
+            System.out.println("Excel文件不存在: " + filename);
+            return null;
+        }
+
         try (InputStream inputStream = new FileInputStream(mFile)) {
             Workbook workbook = new XSSFWorkbook(inputStream);
             Sheet sheet = workbook.getSheetAt(0);
-            int totalRows = 10;
-            int totalColumns = 25;
+            int totalRows = MatrixConfig.getPointCount();
+            int totalColumns = MatrixConfig.getResistanceCount() + 1;
             String[][] result = new String[totalRows][totalColumns];
             for (int i = 0; i < totalRows; i++) {
                 Row row = sheet.getRow(i);
@@ -42,6 +50,10 @@ public class ExcelUtils {
                 }
                 for (int j = 0; j < totalColumns; j++) {
                     Cell cell = row.getCell(j);
+                    if (cell == null) {
+                        result[i][j] = null;
+                        continue;
+                    }
                     switch (cell.getCellTypeEnum()) {
                         case STRING:
                             // 获取字符串类型的单元格值
@@ -53,13 +65,15 @@ public class ExcelUtils {
                             // 如果你需要字符串形式的数值
                             result[i][j] = String.valueOf(numericValue);
                             break;
-                        // 处理其他单元格类型...
+                        default:
+                            result[i][j] = null;
+                            break;
                     }
                 }
             }
             return result;
         } catch (Exception e) {
-            System.out.println(e);
+            System.out.println("读取Excel文件失败: " + filename + ", 错误: " + e.getMessage());
         }
 
         return null;

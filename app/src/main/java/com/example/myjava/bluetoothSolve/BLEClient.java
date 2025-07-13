@@ -59,7 +59,7 @@ public class BLEClient {
     private static String lastConnectDeviceAddress = null;
     private static boolean connectLastDevice = false;
     private boolean bStart = false;
-    private static byte[] oneFrame = new byte[74];
+    private static byte[] oneFrame; // 将在需要时初始化
     ProgressDialog mProgressDialog;
     private static boolean bDisplay = false;
     private static int j = 0;
@@ -231,6 +231,12 @@ public class BLEClient {
                 intentAction = Constants.ACTION_GATT_CONNECTED;
                 Message msg = Message.obtain();
                 msg.what = Constants.GATT_SERVICES_DISCOVERED;
+                // 获取设备名称并传递给MainActivity
+                String deviceName = gatt.getDevice().getName();
+                if (deviceName == null || deviceName.isEmpty()) {
+                    deviceName = "未知设备";
+                }
+                msg.obj = deviceName;
                 uiHandler.sendMessage(msg);
                 lastConnectDeviceFile.writeFile(lastConnectDeviceAddress); //把本次连接成功的设备地址写入内部文件
                 lastConnectDeviceFile.closeFile();
@@ -309,7 +315,13 @@ public class BLEClient {
             byte[] data = characteristic.getValue();
             //如果连接设备发送数据到手机端，将通过这个函数获取数据。
             logfile.writeStringWithEOL("onCharacteristicChanged data length" + data.length);
-            if(data[0] == 0x31 && data[73] == (byte) 0x92) {
+            
+            // 确保oneFrame数组已初始化
+            if (oneFrame == null) {
+                oneFrame = new byte[MatrixConfig.getOneFrameByte()];
+            }
+            
+            if(data[0] == 0x31 && data[oneFrame.length - 1] == (byte) 0x92) {
                 System.arraycopy(data, 0, oneFrame, 0, data.length);
                 handle_test();
             }
@@ -351,10 +363,10 @@ public class BLEClient {
 
 
     private void handle_test() {
-        int[] resultTest = new int[Constants.resistanceCount];
+        int[] resultTest = new int[MatrixConfig.getResistanceCount()];
 
         int num1, num2, num3, num;
-        for (int idx = 0; idx < Constants.resistanceCount; idx++) {
+        for (int idx = 0; idx < MatrixConfig.getResistanceCount(); idx++) {
             num1 = toInt(oneFrame[3 * idx + 3]);
             num2 = toInt(oneFrame[3 * idx + 2]);
             num3 = toInt(oneFrame[3 * idx + 1]);

@@ -7,10 +7,10 @@ import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.view.View;
 
+import com.example.myjava.bluetoothSolve.MatrixConfig;
+
 public class MatrixGridView extends View {
 
-    private int rows = 8; // 行数
-    private int columns = 3; // 列数
     private int cellWidth; // 每个矩形的宽度
     private int cellHeight; // 每个矩形的高度
     private int horizontalSpacing; // 水平间距
@@ -33,21 +33,21 @@ public class MatrixGridView extends View {
         horizontalSpacing = 20; // 设置水平间距
         verticalSpacing = 20; // 设置垂直间距
 
-        values = new double[rows][columns];
+        values = new double[MatrixConfig.getRows()][MatrixConfig.getColumns()];
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        cellWidth = (w - (columns - 1) * horizontalSpacing) / columns;
-        cellHeight = (h - (rows - 1) * verticalSpacing) / rows;
+        cellWidth = (w - (MatrixConfig.getColumns() - 1) * horizontalSpacing) / MatrixConfig.getColumns();
+        cellHeight = (h - (MatrixConfig.getRows() - 1) * verticalSpacing) / MatrixConfig.getRows();
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < columns; j++) {
+        for (int i = 0; i < MatrixConfig.getRows(); i++) {
+            for (int j = 0; j < MatrixConfig.getColumns(); j++) {
                 // 计算矩形左上角坐标
                 int rectLeft = j * (cellWidth + horizontalSpacing);
                 int rectTop = i * (cellHeight + verticalSpacing);
@@ -67,8 +67,6 @@ public class MatrixGridView extends View {
                 canvas.drawText(text, textX, textY, paint);
             }
         }
-
-
     }
     private int getColorForValue(double value) {
         // 将values的范围从0-3.5映射到0-360（色相的范围）
@@ -86,7 +84,7 @@ public class MatrixGridView extends View {
 
     // 外部可以通过这个方法来设置矩阵中特定位置的值
     public void setValue(int row, int col, double value) {
-        if (row >= 0 && row < rows && col >= 0 && col < columns) {
+        if (row >= 0 && row < MatrixConfig.getRows() && col >= 0 && col < MatrixConfig.getColumns()) {
             values[row][col] = value;
             invalidate(); // 重绘视图
         }
