@@ -142,8 +142,8 @@ public class SettingsActivity extends AppCompatActivity {
             }
 
             // 检查矩阵大小是否合理（可以根据需要调整）
-            if (rows > 100 || columns > 100) {
-                Toast.makeText(this, "矩阵大小不能超过100x100", Toast.LENGTH_SHORT).show();
+            if (rows > 16 || columns > 16) {
+                Toast.makeText(this, "矩阵大小不能超过16x16", Toast.LENGTH_SHORT).show();
                 return false;
             }
 

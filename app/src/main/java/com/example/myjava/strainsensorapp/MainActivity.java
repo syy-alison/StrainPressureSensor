@@ -37,6 +37,7 @@ import java.text.SimpleDateFormat;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
+    private Button backBtn;
     private Button searchBtn;
     private TextView connectTx;
     private MatrixGridView matrixGridView;
@@ -50,7 +51,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private CsvOperate resistance;
     private CsvOperate logFile;
     DecimalFormat df = new DecimalFormat(".00");
-    PiecewiseLinearFunction[] functions = new PiecewiseLinearFunction[MatrixConfig.getResistanceCount()];
+    PiecewiseLinearFunction[] functions = null;
 
     //Handler for main thread
     private class MyHandler extends Handler {
@@ -117,6 +118,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
 
+
     private void saveDataToFile(Double[] rowData) {
         for (int i = 0; i < rowData.length; i++) {
             WriteDoubleFramesToFile(rowData[i], i, rowData.length, resistance);
@@ -127,9 +129,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_operate);
-
         // 接收从SettingsActivity传递的矩阵参数
         Intent intent = getIntent();
         if (intent != null) {
@@ -141,7 +140,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             // 设置校准点数到MatrixConfig
             MatrixConfig.setPointCount(pointCount);
         }
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_operate);
 
+        functions = new PiecewiseLinearFunction[MatrixConfig.getResistanceCount()];
+
+        backBtn = findViewById(R.id.back_btn);
+        backBtn.setOnClickListener(this);
         searchBtn = findViewById(R.id.search_bt);
         searchBtn.setOnClickListener(this);
         connectTx = findViewById(R.id.tv_Connect);
@@ -213,10 +218,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
 
     public void onClick(View v) {
-        if (v == searchBtn) {
+        if (v == backBtn) {
+            // 返回设置页面
+            Intent intent = new Intent(this, SettingsActivity.class);
+            startActivity(intent);
+            finish(); // 结束当前Activity
+        } else if (v == searchBtn) {
             if (PermissionManage.verifyBluetoothPermissions(this))
                 mBLEClient.searchDevice();
-
         }
     }
 

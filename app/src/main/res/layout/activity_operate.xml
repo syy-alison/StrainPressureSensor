@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     tools:context="com.example.myjava.strainsensorapp.MainActivity">
 
-    <!-- 顶部一行：按钮、文本、开关 -->
+    <!-- 顶部一行：搜索按钮、文本、开关 -->
     <Button
         android:id="@+id/search_bt"
         android:layout_width="wrap_content"
@@ -65,11 +65,29 @@
         android:layout_height="0dp"
         android:layout_marginStart="5dp"
         android:layout_marginEnd="5dp"
-        android:layout_marginTop="5dp"
-        android:layout_marginBottom="16dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="8dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/search_bt"
+        app:layout_constraintBottom_toTopOf="@+id/back_btn" />
+
+    <!-- 底部：返回按钮 -->
+    <Button
+        android:id="@+id/back_btn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:text="返回设置"
+        android:textSize="14sp"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="12sp"
+        android:autoSizeMaxTextSize="16sp"
+        android:autoSizeStepGranularity="1sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
 </android.support.constraint.ConstraintLayout>
