@@ -40,8 +40,8 @@ public class BLEClient {
 
     // constants
     // constants
-    private static final String ecCharacteristicNotifyUUID = "0000fff1-0000-1000-8000-00805f9b34fb";
-    private static final String ecCharacteristicWriteUUID = "0000fff2-0000-1000-8000-00805f9b34fb";
+    private static final String ecCharacteristicNotifyUUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E";
+    private static final String ecCharacteristicWriteUUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E";
     public static final int REQUEST_ENABLE_BT = 2;
     private static boolean connectFlag = false;
     private static BluetoothGattCharacteristic ecCharacteristicWrite;
